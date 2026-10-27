@@ -52,14 +52,33 @@ document.querySelector('#btn-login').addEventListener('click', () => {
     }
 });
 
-// 5. LÃ³gica de SubmissÃ£o de Cadastro (Onde aplicaremos as RegEx)
-document.querySelector('#form-cadastro').addEventListener('submit', (e) => {
+// 5. Lógica de Submissão de Cadastro (envia os dados para a API)
+document.querySelector('#form-cadastro').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // TODO: Os alunos vÃ£o validar os campos com RegEx e conferir se as senhas coincidem.
-    // ApÃ³s a validaÃ§Ã£o com sucesso, transita para a tela de anÃ¡lise:
-    secaoCadastro.style.display = 'none';
-    secaoSucesso.style.display = 'block';
+    // TODO: Os alunos vão validar os campos com RegEx.
+    const senha = document.querySelector('#cad-senha').value;
+    const confirma = document.querySelector('#cad-confirma-senha').value;
+
+    if (senha.length < 8) {
+        alert('A senha precisa ter pelo menos 8 caracteres.');
+        return;
+    }
+    if (senha !== confirma) {
+        alert('As senhas não coincidem.');
+        return;
+    }
+
+    // Lê os dados do formulário ANTES de qualquer reset()
+    const dados = montarDadosCadastro();
+
+    try {
+        await cadastrarClienteNaAPI(dados);
+        secaoCadastro.style.display = 'none';
+        secaoSucesso.style.display = 'block';
+    } catch (erro) {
+        alert('Não foi possível concluir o cadastro: ' + erro.message);
+    }
 });
 
 // 6. BotÃ£o para voltar ao inÃ­cio a partir da tela de sucesso
@@ -79,27 +98,26 @@ document.querySelector('#btn-sair').addEventListener('click', () => {
 // 8. Seleciona o formulário de cadastro na página
 const formCadastro = document.querySelector('#form-cadastro');
 if (formCadastro) {
- // Adiciona um ouvinte para disparar sempre que houver digitação nos inputs
- formCadastro.addEventListener('input', () => {
- // Cria um objeto estruturado contendo os dados atuais dos campos
- const dadosRascunho = {
- dados: {
- nome: document.querySelector('#cad-nome').value,
- nome: document.querySelector('#cad-cpf').value,
- nome: document.querySelector('#cad-email').value,
- nome: document.querySelector('#cad-celular').value,
- nome: document.querySelector('#cad-cep').value,
- nome: document.querySelector('#cad-endereco').value,
- nome: document.querySelector('#cad-cidade').value,
- nome: document.querySelector('#cad-estado').value,
- // FAÇA O MESMO PARA OS CAMPOS ABAIXO:
-// cpf, email, celular, cep, endereco, cidade, estado
- },
- timestamp: new Date().getTime()
- };
- // Salva no localStorage convertendo o objeto em string JSON
- localStorage.setItem('senac_rascunho_cadastro', JSON.stringify(dadosRascunho));
- });
+    // Adiciona um ouvinte para disparar sempre que houver digitação nos inputs
+    formCadastro.addEventListener('input', () => {
+        // Cria um objeto estruturado contendo os dados atuais dos campos
+        // (a senha NÃO é salva no rascunho, por segurança)
+        const dadosRascunho = {
+            dados: {
+                nome: document.querySelector('#cad-nome').value,
+                cpf: document.querySelector('#cad-cpf').value,
+                email: document.querySelector('#cad-email').value,
+                celular: document.querySelector('#cad-celular').value,
+                cep: document.querySelector('#cad-cep').value,
+                endereco: document.querySelector('#cad-endereco').value,
+                cidade: document.querySelector('#cad-cidade').value,
+                estado: document.querySelector('#cad-estado').value
+            },
+            timestamp: new Date().getTime()
+        };
+        // Salva no localStorage convertendo o objeto em string JSON
+        localStorage.setItem('senac_rascunho_cadastro', JSON.stringify(dadosRascunho));
+    });
 }
 
 // 9. Executado recuperação dos dados assim que a página é carregada
@@ -125,20 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
    });
 
-// 10. Limpeza ao submeter o formulário com sucesso
+// 10. Limpeza do rascunho ao submeter o formulário
+// (a troca de tela agora acontece na seção 5, só depois que a API responde com sucesso)
 if (formCadastro) {
-    formCadastro.addEventListener('submit', (e) => {
-        // 1. Evita o recarregamento da página
-        e.preventDefault();
-        
-        // 2. Remove o rascunho do localStorage (substitua 'rascunho' pela chave real que você usou)
-        localStorage.removeItem('rascunho');
-        
-        // 3. Reseta o formulário
-        formCadastro.reset();
-        
-        secaoCadastro.style.display = 'none';
-        secaoSucesso.style.display = 'block';
+    formCadastro.addEventListener('submit', () => {
+        localStorage.removeItem('senac_rascunho_cadastro');
     });
 }
 
@@ -229,6 +238,211 @@ function verificarReconhecimento() {
     verificarReconhecimento();
     });
 
+// 14. Cadastro de cliente via API (POST + fetch)
+const API_CLIENTES = 'https://senac-bank-api.dennislopes.com.br/api/clientes';
+
+// Monta o objeto que será enviado no corpo da requisição
+function montarDadosCadastro() {
+    return {
+        nome: document.querySelector('#cad-nome').value.trim(),
+        cpf: document.querySelector('#cad-cpf').value.trim(),
+        email: document.querySelector('#cad-email').value.trim(),
+        celular: document.querySelector('#cad-celular').value.trim(),
+        cep: document.querySelector('#cad-cep').value.trim(),
+        endereco: document.querySelector('#cad-endereco').value.trim(),
+        cidade: document.querySelector('#cad-cidade').value.trim(),
+        estado: document.querySelector('#cad-estado').value.trim().toUpperCase(),
+        senha: document.querySelector('#cad-senha').value
+    };
+}
+
+// Envia o cliente para a API e devolve o JSON retornado pelo servidor
+async function cadastrarClienteNaAPI(dados) {
+    const resposta = await fetch(API_CLIENTES, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+    });
+
+    const resultado = await resposta.json().catch(() => ({}));
+
+    if (!resposta.ok) {
+        console.error('Erro da API:', resultado);
+        throw new Error(resultado.message || resultado.erro || `HTTP ${resposta.status}`);
+    }
+
+    console.log('Cliente cadastrado com sucesso:', resultado);
+    return resultado;
+}
+
+// Versão para colar direto no console do navegador (preencha o nome real e execute):
+// cadastrarClienteNaAPI({
+//     nome: 'SEU NOME COMPLETO AQUI',
+//     cpf: '529.982.247-25',
+//     email: 'seu.nome@exemplo.com',
+//     celular: '(11) 91234-5678',
+//     cep: '01310-100',
+//     endereco: 'Av. Paulista, 1000 - Apto 42',
+//     cidade: 'São Paulo',
+//     estado: 'SP',
+//     senha: 'senha1234'
+// });
 
 
-   
+// 15. Ativação de conta via API (PATCH)
+// O cliente nasce com ativo: false; esta rota libera o acesso da conta.
+// A API pode responder com JSON ou com texto puro, então lemos como texto e tentamos converter.
+async function lerRespostaDaAPI(resposta) {
+    const texto = await resposta.text();
+    try {
+        return JSON.parse(texto);
+    } catch {
+        return texto;
+    }
+}
+
+async function ativarClienteNaAPI(cpf) {
+    const resposta = await fetch(`${API_CLIENTES}/${encodeURIComponent(cpf)}/ativar`, {
+        method: 'PATCH'
+    });
+
+    const resultado = await lerRespostaDaAPI(resposta);
+
+    if (!resposta.ok) {
+        console.error('Erro da API:', resultado);
+        throw new Error(typeof resultado === 'string' ? resultado : (resultado.message || resultado.erro || `HTTP ${resposta.status}`));
+    }
+
+    console.log('Conta ativada com sucesso:', resultado);
+    return resultado;
+}
+
+// Versão para colar direto no console (use o mesmo CPF do cadastro):
+// ativarClienteNaAPI('529.982.247-25');
+
+
+// 16. Login de cliente via API (POST)
+async function loginNaAPI(cpf, senha) {
+    const resposta = await fetch(`${API_CLIENTES}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf, senha })
+    });
+
+    // Falha (CPF/senha inválidos, conta inativa etc.): a API pode mandar texto puro
+    if (!resposta.ok) {
+        const textoErro = await resposta.text();
+        console.error('Falha no login:', textoErro || `HTTP ${resposta.status}`);
+        throw new Error(textoErro || `HTTP ${resposta.status}`);
+    }
+
+    // Sucesso: converte para JSON
+    const cliente = await resposta.json();
+    const nome = cliente.nome || (cliente.cliente && cliente.cliente.nome) || '';
+    console.log(`Bem-vindo(a), ${nome}!`);
+    console.log('Dados do cliente logado:', cliente);
+    return cliente;
+}
+
+// Versão para colar direto no console (use o CPF e a senha que você cadastrou):
+// loginNaAPI('529.982.247-25', 'senha1234');
+
+
+// 17. Listagem de clientes via API (GET + console.table)
+async function listarClientesDaAPI() {
+    const resposta = await fetch(API_CLIENTES, { method: 'GET' });
+
+    if (!resposta.ok) {
+        const textoErro = await resposta.text();
+        console.error('Falha ao listar clientes:', textoErro || `HTTP ${resposta.status}`);
+        throw new Error(textoErro || `HTTP ${resposta.status}`);
+    }
+
+    const dados = await resposta.json();
+
+    // A lista pode vir direto como array ou dentro de um objeto (ex.: { clientes: [...] })
+    const lista = Array.isArray(dados)
+        ? dados
+        : (dados.clientes || dados.content || dados.data || []);
+
+    console.log(`Total de clientes: ${lista.length}`);
+    console.table(lista);
+    return lista;
+}
+
+// Versão para colar direto no console:
+// listarClientesDaAPI();
+
+
+// 18. Atualização completa de cliente via API (PUT)
+// PUT substitui o cadastro inteiro: por isso enviamos TODOS os campos, não só os alterados.
+async function atualizarClienteNaAPI(cpf, dadosAtualizados) {
+    const resposta = await fetch(`${API_CLIENTES}/${encodeURIComponent(cpf)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosAtualizados)
+    });
+
+    // Lê como texto e tenta converter, pois a API pode responder com JSON ou texto puro
+    const texto = await resposta.text();
+    let resultado;
+    try {
+        resultado = JSON.parse(texto);
+    } catch {
+        resultado = texto;
+    }
+
+    if (!resposta.ok) {
+        console.error('Erro da API:', resultado);
+        throw new Error(typeof resultado === 'string' ? resultado : (resultado.message || resultado.erro || `HTTP ${resposta.status}`));
+    }
+
+    console.log('Cliente atualizado com sucesso:', resultado);
+    return resultado;
+}
+
+// Versão para colar direto no console (use o CPF cadastrado e o seu nome real):
+// atualizarClienteNaAPI('529.982.247-25', {
+//     nome: 'SEU NOME COMPLETO AQUI',
+//     cpf: '529.982.247-25',
+//     email: 'novo.email@exemplo.com',
+//     celular: '(11) 98765-4321',
+//     cep: '04538-132',
+//     endereco: 'Av. Brigadeiro Faria Lima, 2000 - Sala 10',
+//     cidade: 'São Paulo',
+//     estado: 'SP',
+//     senha: 'senha1234'
+// });
+
+
+// 19. Exclusão de cliente via API (DELETE)
+// Regra de negócio: a API só exclui se o saldo da conta estiver zerado.
+async function excluirClienteNaAPI(cpf) {
+    const resposta = await fetch(`${API_CLIENTES}/${encodeURIComponent(cpf)}`, {
+        method: 'DELETE'
+    });
+
+    // Lê como texto: a API pode responder com texto, JSON ou corpo vazio (204)
+    const texto = await resposta.text();
+    let resultado;
+    try {
+        resultado = texto ? JSON.parse(texto) : '';
+    } catch {
+        resultado = texto;
+    }
+
+    // Erro tratado (ex.: conta ainda possui saldo)
+    if (!resposta.ok) {
+        const mensagem = typeof resultado === 'string'
+            ? resultado
+            : (resultado.message || resultado.erro || `HTTP ${resposta.status}`);
+        console.error(`Não foi possível excluir (HTTP ${resposta.status}):`, mensagem || 'conta com saldo ou cliente inexistente');
+        throw new Error(mensagem || `HTTP ${resposta.status}`);
+    }
+
+    console.log(`Cliente excluído com sucesso (HTTP ${resposta.status}):`, resultado || 'Cliente excluído.');
+    return resultado;
+}
+
+// Versão para colar direto no console (use o CPF cadastrado):
+// excluirClienteNaAPI('529.982.247-25');
