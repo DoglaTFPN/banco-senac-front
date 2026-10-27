@@ -4,7 +4,7 @@ fetch('https://senac-bank-api.dennislopes.com.br/api/clientes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-        nome: 'SEU NOME COMPLETO AQUI',
+        nome: 'Douglas Saragoza da Silva',
         cpf: '529.982.247-25',          // CPF válido de teste
         email: 'seu.nome@exemplo.com',
         celular: '(11) 91234-5678',
